@@ -1,7 +1,7 @@
 <launch>
 
 	<node pkg="final" type="final.py" name="final" output="screen">
-
+        <param name="speed" type="double" value="1.0" />
 	</node>
 
 </launch>
