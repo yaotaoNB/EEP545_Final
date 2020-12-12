@@ -17,6 +17,8 @@ import GraphGenerator
 import Utils
 
 import csv
+import os
+from pathlib import Path
 
 class PlannerNode(object):
 
@@ -295,69 +297,24 @@ class PlannerNode(object):
     self.cur_plan = np.array(plan_list)
 
     if (self.cur_plan is not None) and (self.plan_pub is not None): #this step is only for visualization of the final plan in rviz
-      self.publish_plan(self.cur_plan)
-
-
-  # def update_plan(self): #remove this function after everything runs fine
-  #   self.source_lock.acquire()
-  #   self.target_lock.acquire()
-  #   if self.source_pose is not None:
-  #     source_pose = np.array(self.source_pose).reshape(2)
-  #   if self.target_pose is not None:
-  #     target_pose = np.array(self.target_pose).reshape(2)
-  #   replan = ((self.source_updated or self.target_updated) and
-  #             (self.source_pose is not None and self.target_pose is not None))
-  #   self.source_updated = False
-  #   self.target_updated = False
-  #   self.source_lock.release()
-  #   self.target_lock.release()
-  #   if replan:
-  #     if(np.abs(source_pose-target_pose).sum() < sys.float_info.epsilon):
-  #       print '[Planner Node] Source and target are the same, will not plan'
-  #       return
-
-  #     if not self.environment.manager.get_state_validity(source_pose):
-  #       print '[Planner Node] Source in collision, will not plan'
-  #       return
-
-  #     if not self.environment.manager.get_state_validity(target_pose):
-  #       print '[Planner Node] Target in collision, will not plan'
-  #       return
-
-  #     print '[Planner Node] Inserting source and target'
-  #     self.environment.set_source_and_target(source_pose, target_pose)
-
-  #     print '[Planner Node] Computing plan...'
-  #     self.cur_plan = self.planner.plan()    
-      
-  #     if self.cur_plan is not None:
-  #       self.cur_plan = self.planner.post_process(self.cur_plan, 5)
-  #       self.cur_plan = self.add_orientation(self.cur_plan)
-  #       print '[Planner Node] ...plan complete'
-  #     else:
-  #       print '[Planner Node] ...could not compute a plan'
-      
-
-  #   if (self.cur_plan is not None) and (self.plan_pub is not None):
-  #     self.publish_plan(self.cur_plan)  
-    
-green = [2500, 640] #start point
-blue = [[2600, 660],[1880,440],[1435,545],[1250,460],[540,835]] #good points
-red = [] #bad points
+      self.publish_plan(self.cur_plan) 
 
 #take a csv file path and return a list of waypoints
 def get_waypoint(path):
+  dir_path = os.path.dirname(os.path.realpath(__file__))
+  dir_path = str(Path(dir_path).parent)
+  csv_path = dir_path + path
   pose = []
-  with open(path) as csv_file: 
+  with open(csv_path) as csv_file: 
     csv_reader = csv.reader(csv_file, delimiter=',')
     count = 0;
-      for row in content:
-        if count == 0:
-          count += 1
-          continue
-        else:
-          new_pose = [row[0], row[1], 0.0]
-          pose.append(new_pose)
+    for row in csv_reader:
+      if count == 0:
+        count += 1
+        continue
+      else:
+        new_pose = [float(row[0]), float(row[1]), 0.0]
+        pose.append(new_pose)
   return pose
 
 # a or b are np.array with 2 elements like this: [x, y]
@@ -399,21 +356,20 @@ if __name__ == '__main__':
   car_width = rospy.get_param("/car_kinematics/car_width", 0.33)
   car_length = rospy.get_param("/car_kinematics/car_length", 0.33)
 
-  csv_start = '../way_points/real_car/start.csv'
-  csv_good = '../way_points/real_car/good_waypoints.csv'
-  csv_bad = '../way_points/real_car/bad_waypoints.csv'
+  csv_start = '/waypoints/real_car/start.csv'
+  csv_good = '/waypoints/real_car/good_waypoints.csv'
+  csv_bad = '/waypoints/real_car/bad_waypoints.csv'
   start_point = get_waypoint(csv_start)
+  start_point = start_point[0][:]
   good_points = get_waypoint(csv_good)
   bad_points = get_waypoint(csv_bad)
+  # print('start_point: ', start_point)
+  # print('good_points: ', good_points)
+  # print('bad_points: ', bad_points)
 
   start_waypoint_topic = "/waypoint/start"
   good_waypoint_topic = "/waypoint/good"
   bad_waypoint_topic = "/waypoint/bad"
-
-  # for testing purposes without csv handler
-  # start_point = green
-  # good_points = blue
-  # bad_points = red
 
   pose_arr = get_pose_arr(start_point, good_points)
 
@@ -434,7 +390,7 @@ if __name__ == '__main__':
                    start_point,
                    good_points,
                    bad_points)
-   
+
   pn.publish_waypoints_viz()
                    
   if pub_topic is not None:
