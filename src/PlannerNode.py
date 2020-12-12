@@ -14,8 +14,7 @@ from HaltonEnvironment import HaltonEnvironment
 import GraphGenerator
 import Utils
 
-import csv_handler
-
+import csv
 
 class PlannerNode(object):
 
@@ -29,7 +28,14 @@ class PlannerNode(object):
                      service_topic,
                      car_width,
                      car_length,
-                     pose_arr):
+                     pose_arr,
+                     start_waypoint_topic, #for visualization in rviz
+                     good_waypoint_topic, #for visualization in rviz
+                     bad_waypoint_topic, #for visualization in rviz
+                     start_waypoint_pose, #for visualization in rviz
+                     good_waypoint_pose, #for visualization in rviz
+                     bad_waypoint_pose #for visualization in rviz
+                     ):
     
     print("[Planner Node] Getting map from service...")
     rospy.wait_for_service(map_service_name)
@@ -61,6 +67,13 @@ class PlannerNode(object):
     print('pub topic: ' + pub_topic)
     if pub_topic is not None:
       self.plan_pub = rospy.Publisher(pub_topic, PoseArray, queue_size=1)  
+
+      #waypoints visualization purpose
+      self.start_waypoint_pub = rospy.Publisher(start_waypoint_topic, PoseArray, queue_size=1)  
+      self.good_waypoint_pub = rospy.Publisher(good_waypoint_topic, PoseArray, queue_size=1)  
+      self.bad_waypoint_pub = rospy.Publisher(bad_waypoint_topic, PoseArray, queue_size=1)  
+      self.publish_waypoints_viz(start_waypoint_pose, good_waypoint_pose, bad_waypoint_pose)
+
       self.source_sub = rospy.Subscriber(source_topic, 
                                          PoseWithCovarianceStamped, 
                                          self.source_cb,
@@ -126,6 +139,52 @@ class PlannerNode(object):
     
     self.target_lock.release()    
     
+  #green = start, blue = good points, red = bad points
+  def publish_waypoints_viz(self, green, blue, red):
+    p_start = PoseArray()
+    p_good = PoseArray()
+    p_bad = PoseArray()
+    p_start.header.frame_id = "/map"
+    p_good.header.frame_id = "/map"
+    p_bad.header.frame_id = "/map"
+
+    #start:
+    config = green[:]
+    pose = Pose()
+    pose.position.x = config[0]
+    pose.position.y = config[1]
+    pose.position.z = 0.0
+    # *** set all angles to 0.0 as dummy for now as I gotta figure out what obj type to use for waypoints viz, as waypoints shouldn't have any orientation **
+    pose.orientation = Utils.angle_to_quaternion(0.0) 
+    p_start.poses.append(pose)
+    self.start_waypoint_pub.publish(p_start) 
+
+    #good points
+    for i in xrange(len(blue)):
+      config = blue[i]
+      pose = Pose()
+      pose.position.x = config[0]
+      pose.position.y = config[1]
+      pose.position.z = 0.0
+      # *** same as above ***
+      pose.orientation = Utils.angle_to_quaternion(0.0)
+      p_good.poses.append(pose)
+    self.good_waypoint_pub.publish(p_good) 
+
+    #bad points
+    for i in xrange(len(red)):
+      config = red[i]
+      pose = Pose()
+      pose.position.x = config[0]
+      pose.position.y = config[1]
+      pose.position.z = 0.0
+      # *** same as above ***
+      pose.orientation = Utils.angle_to_quaternion(0.0)
+      p_bad.poses.append(pose)
+    self.bad_waypoint_pub.publish(p_bad) 
+
+
+
   def publish_plan(self, plan):
     pa = PoseArray()
     pa.header.frame_id = "/map"
@@ -201,10 +260,12 @@ class PlannerNode(object):
 
       final_plan.append(temp_plan)
 
-    #after csv_handler and map_gen is finished, check what array type (np array or py list?) is self.cur_plan so that self.cur_plan is a whole plan array in the end
-    for i in final_plan:
-      for j in i:
-        self.cur_plan.append(j)
+    plan_list = []
+    for plan in final_plan:
+      for p_pose in plan:
+        plan_list.append(p_pose)
+
+    self.cur_plan = np.array(plan_list)
 
     if (self.cur_plan is not None) and (self.plan_pub is not None): #this step is only for visualization of the final plan in rviz
       self.publish_plan(self.cur_plan)
@@ -253,11 +314,33 @@ class PlannerNode(object):
   #   if (self.cur_plan is not None) and (self.plan_pub is not None):
   #     self.publish_plan(self.cur_plan)  
     
+green = [2500, 640] #start point
+blue = [[2600, 660],[1880,440],[1435,545],[1250,460],[540,835]] #good points
+red = [] #bad points
+
+#take a csv file path and return a list of waypoints
+def get_waypoint(path):
+  pose = []
+  with open(path) as csv_file: 
+    csv_reader = csv.reader(csv_file, delimiter=',')
+    count = 0;
+      for row in content:
+        if count == 0:
+          count += 1
+          continue
+        else:
+          new_pose = [row[0], row[1], 0.0]
+          good_pose.append(new_pose)
+  return pose
+
 # a or b are np.array with 2 elements like this: [x, y]
 def L2dist(a, b): #return L2 distance between a and b
-  return np.linalg.norm(a-b)
+  pa = np.array(a)
+  pb = np.array(b)
+  return np.linalg.norm(pa-pb)
 
-def get_pose_arr(start_point, good_points):
+#start_point and good_points are initially python list
+def get_pose_arr(start_point, good_points): 
   pose_arr = []
   pose_arr.append(start_point)
   pool = good_points[:]
@@ -273,7 +356,7 @@ def get_pose_arr(start_point, good_points):
     cur = pool[minidx]
     pose_arr.append(pool[minidx])
     del pool[minidx]
-  return pose_arr #not sure about numpy to list or vice versa conversion yet but it depends on if planner takes np.array or a list, finish this later
+  return np.array(pose_arr) #not sure about numpy to list or vice versa conversion yet but it depends on if planner takes np.array or a list, finish this later
 
 if __name__ == '__main__':
   rospy.init_node('planner_node', anonymous=True)
@@ -289,9 +372,22 @@ if __name__ == '__main__':
   car_width = rospy.get_param("/car_kinematics/car_width", 0.33)
   car_length = rospy.get_param("/car_kinematics/car_length", 0.33)
 
-  csv_path = '../way_points/real_car/'
-  start_point = csv_handler.get_waypoint_start(csv_path)
-  good_points = csv_handler.get_waypoint_good(csv_path)
+  csv_start = '../way_points/real_car/start.csv'
+  csv_good = '../way_points/real_car/good_waypoints.csv'
+  csv_bad = '../way_points/real_car/bad_waypoints.csv'
+  start_point = get_waypoint(csv_start)
+  good_points = get_waypoint(csv_good)
+  bad_points = get_waypoint(csv_bad)
+
+  start_waypoint_topic = "/waypoint/start"
+  good_waypoint_topic = "/waypoint/good"
+  bad_waypoint_topic = "/waypoint/bad"
+
+  # for testing purposes without csv handler
+  # start_point = green
+  # good_points = blue
+  # bad_points = red
+
   pose_arr = get_pose_arr(start_point, good_points)
 
   pn = PlannerNode(map_service_name, 
@@ -304,12 +400,22 @@ if __name__ == '__main__':
                    service_topic,
                    car_width,
                    car_length,
-                   pose_arr)
+                   pose_arr,
+                   start_waypoint_topic,
+                   good_waypoint_topic,
+                   bad_waypoint_topic,
+                   start_point,
+                   good_points,
+                   bad_points)
                    
-  while not rospy.is_shutdown():
-    if pub_topic is not None:
+  if pub_topic is not None:
       pn.plan_lock.acquire()
-      pn.update_plan()
+      pn.final_plan()
       pn.plan_lock.release()
-    rospy.sleep(1.0) 
 
+  while not rospy.is_shutdown():
+    # if pub_topic is not None:
+    #   pn.plan_lock.acquire()
+    #   pn.update_plan()
+    #   pn.plan_lock.release()
+    rospy.sleep(1.0) 
