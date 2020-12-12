@@ -330,7 +330,7 @@ def get_waypoint(path):
           continue
         else:
           new_pose = [row[0], row[1], 0.0]
-          good_pose.append(new_pose)
+          pose.append(new_pose)
   return pose
 
 # a or b are np.array with 2 elements like this: [x, y]

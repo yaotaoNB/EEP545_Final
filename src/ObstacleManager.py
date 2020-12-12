@@ -3,6 +3,8 @@ import math
 import numpy
 import Utils
 
+BAD_WAYPOINTS = '../way_points/real_car/bad_waypoints.csv'
+
 class ObstacleManager(object):
 
   def __init__(self, mapMsg, car_width, car_length, collision_delta):
@@ -24,6 +26,21 @@ class ObstacleManager(object):
     self.robotWidth = int(car_width / self.map_info.resolution + 0.5)
     self.robotLength = int(car_length / self.map_info.resolution + 0.5)
     self.collision_delta = collision_delta
+
+    box_length = np.sqrt(self.robotLength**2 + self.robotWidth**2)
+    self.box = np.array([int(box_length), int(box_length)])
+
+    with open(BAD_WAYPOINTS) as csv_file: 
+    csv_reader = csv.reader(csv_file, delimiter=',')
+    count = 0;
+    for row in content:
+      if count == 0:
+        count += 1
+        continue
+      else:
+        bad_x = int(row[0])
+        bad_y = int(self.mapHeight - row[1])
+        self.mapImageBW[2 * bad_y - (self.box[0] / 2):(self.box[0] / 2), 2 * bad_x - (self.box[1] / 2):(self.box[1] / 2), 0] = 255
 
   # Check if the passed config is in collision
   # config: The configuration to check (in meters and radians)
