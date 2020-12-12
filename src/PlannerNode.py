@@ -7,6 +7,8 @@ import sys
 
 from nav_msgs.srv import GetMap
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, PoseArray
+from std_msgs.msg import ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
 from lab5.srv import *
 
 from HaltonPlanner import HaltonPlanner
@@ -64,15 +66,18 @@ class PlannerNode(object):
     self.pose_arr = pose_arr
     
     self.orientation_window_size = 21
+
+    self.start_waypoint_pose = start_waypoint_pose
+    self.good_waypoint_pose = good_waypoint_pose
+    self.bad_waypoint_pose = bad_waypoint_pose
+    #waypoints visualization purpose
+    self.start_waypoint_pub = rospy.Publisher(start_waypoint_topic, Marker, queue_size=1)  
+    self.good_waypoint_pub = rospy.Publisher(good_waypoint_topic, MarkerArray, queue_size=1)  
+    self.bad_waypoint_pub = rospy.Publisher(bad_waypoint_topic, MarkerArray, queue_size=1) 
+
     print('pub topic: ' + pub_topic)
     if pub_topic is not None:
       self.plan_pub = rospy.Publisher(pub_topic, PoseArray, queue_size=1)  
-
-      #waypoints visualization purpose
-      self.start_waypoint_pub = rospy.Publisher(start_waypoint_topic, PoseArray, queue_size=1)  
-      self.good_waypoint_pub = rospy.Publisher(good_waypoint_topic, PoseArray, queue_size=1)  
-      self.bad_waypoint_pub = rospy.Publisher(bad_waypoint_topic, PoseArray, queue_size=1)  
-      self.publish_waypoints_viz(start_waypoint_pose, good_waypoint_pose, bad_waypoint_pose)
 
       self.source_sub = rospy.Subscriber(source_topic, 
                                          PoseWithCovarianceStamped, 
@@ -140,48 +145,70 @@ class PlannerNode(object):
     self.target_lock.release()    
     
   #green = start, blue = good points, red = bad points
-  def publish_waypoints_viz(self, green, blue, red):
-    p_start = PoseArray()
-    p_good = PoseArray()
-    p_bad = PoseArray()
+  def publish_waypoints_viz(self): 
+    green_color = ColorRGBA()
+    green_color.r = 0
+    green_color.g = 255 #or 1.0
+    green_color.b = 0
+    green_color.a = 1
+
+    blue_color = ColorRGBA()
+    blue_color.r = 0
+    blue_color.g = 0 
+    blue_color.b = 255
+    blue_color.a = 1
+
+    red_color = ColorRGBA()
+    red_color.r = 255
+    red_color.g = 0 
+    red_color.b = 0
+    red_color.a = 1
+
+    p_start = Marker()
+    p_good = MarkerArray()
+    p_bad = MarkerArray()
     p_start.header.frame_id = "/map"
     p_good.header.frame_id = "/map"
     p_bad.header.frame_id = "/map"
 
-    #start:
-    config = green[:]
-    pose = Pose()
-    pose.position.x = config[0]
-    pose.position.y = config[1]
-    pose.position.z = 0.0
+    #start: is a single waypoint
+    config = self.start_waypoint_pose[:]
+    p_start.pose.position.x = config[0]
+    p_start.pose.position.y = config[1]
+    p_start.pose.position.z = 0.0
+    p_start.type = p_start.SPHERE
+    p_start.color = green_color
     # *** set all angles to 0.0 as dummy for now as I gotta figure out what obj type to use for waypoints viz, as waypoints shouldn't have any orientation **
-    pose.orientation = Utils.angle_to_quaternion(0.0) 
-    p_start.poses.append(pose)
+    # pose.orientation = Utils.angle_to_quaternion(0.0) 
     self.start_waypoint_pub.publish(p_start) 
 
-    #good points
-    for i in xrange(len(blue)):
-      config = blue[i]
-      pose = Pose()
-      pose.position.x = config[0]
-      pose.position.y = config[1]
-      pose.position.z = 0.0
+    #good points: an array of waypoints
+    for i in xrange(len(self.good_waypoint_pose)):
+      config = self.good_waypoint_pose[i]
+      marker = Marker()
+      marker.position.x = config[0]
+      marker.position.y = config[1]
+      marker.position.z = 0.0
+      marker.type = marker.SPHERE
+      marker.color = blue_color
       # *** same as above ***
-      pose.orientation = Utils.angle_to_quaternion(0.0)
-      p_good.poses.append(pose)
+      # pose.orientation = Utils.angle_to_quaternion(0.0)
+      p_good.markers.append(marker)
     self.good_waypoint_pub.publish(p_good) 
 
     #bad points
-    for i in xrange(len(red)):
-      config = red[i]
-      pose = Pose()
-      pose.position.x = config[0]
-      pose.position.y = config[1]
-      pose.position.z = 0.0
+    for i in xrange(len(self.bad_waypoint_pose)):
+      config = self.bad_waypoint_pose[i]
+      marker = Marker()
+      marker.position.x = config[0]
+      marker.position.y = config[1]
+      marker.position.z = 0.0
+      marker.type = marker.SPHERE
+      marker.color = red_color
       # *** same as above ***
-      pose.orientation = Utils.angle_to_quaternion(0.0)
-      p_bad.poses.append(pose)
-    self.bad_waypoint_pub.publish(p_bad) 
+      # pose.orientation = Utils.angle_to_quaternion(0.0)
+      p_bad.markers.append(marker)
+    self.bad_waypoint_pub.publish(p_bad)
 
 
 
@@ -407,6 +434,8 @@ if __name__ == '__main__':
                    start_point,
                    good_points,
                    bad_points)
+   
+  pn.publish_waypoints_viz()
                    
   if pub_topic is not None:
       pn.plan_lock.acquire()
