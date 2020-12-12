@@ -73,9 +73,9 @@ class PlannerNode(object):
     self.good_waypoint_pose = good_waypoint_pose
     self.bad_waypoint_pose = bad_waypoint_pose
     #waypoints visualization purpose
-    self.start_waypoint_pub = rospy.Publisher(start_waypoint_topic, Marker, queue_size=1)  
-    self.good_waypoint_pub = rospy.Publisher(good_waypoint_topic, MarkerArray, queue_size=1)  
-    self.bad_waypoint_pub = rospy.Publisher(bad_waypoint_topic, MarkerArray, queue_size=1) 
+    self.start_waypoint_pub = rospy.Publisher(start_waypoint_topic, Marker, queue_size=100)  
+    self.good_waypoint_pub = rospy.Publisher(good_waypoint_topic, MarkerArray, queue_size=100)  
+    self.bad_waypoint_pub = rospy.Publisher(bad_waypoint_topic, MarkerArray, queue_size=100) 
 
     print('pub topic: ' + pub_topic)
     if pub_topic is not None:
@@ -149,67 +149,103 @@ class PlannerNode(object):
   #green = start, blue = good points, red = bad points
   def publish_waypoints_viz(self): 
     green_color = ColorRGBA()
-    green_color.r = 0
-    green_color.g = 255 #or 1.0
-    green_color.b = 0
-    green_color.a = 1
+    green_color.r = 0.0
+    green_color.g = 1.0 #or 1.0
+    green_color.b = 0.0
+    green_color.a = 1.0
 
     blue_color = ColorRGBA()
     blue_color.r = 0
     blue_color.g = 0 
-    blue_color.b = 255
-    blue_color.a = 1
+    blue_color.b = 1.0
+    blue_color.a = 1.0
 
     red_color = ColorRGBA()
-    red_color.r = 255
+    red_color.r = 1.0
     red_color.g = 0 
     red_color.b = 0
-    red_color.a = 1
+    red_color.a = 1.0
+
+    w_id = 0
 
     p_start = Marker()
     p_good = MarkerArray()
     p_bad = MarkerArray()
-    p_start.header.frame_id = "/map"
-    p_good.header.frame_id = "/map"
-    p_bad.header.frame_id = "/map"
+    p_start.header.frame_id = "map"
 
     #start: is a single waypoint
     config = self.start_waypoint_pose[:]
+
+    p_start.ns = 'start_waypoint'
+    p_start.id = w_id
+    w_id += 1
+    p_start.header.stamp = rospy.Time()
+    p_start.action = p_start.ADD
+    p_start.scale.x = 0.35
+    p_start.scale.y = 0.35
+    p_start.scale.z = 0.1
+
     p_start.pose.position.x = config[0]
     p_start.pose.position.y = config[1]
     p_start.pose.position.z = 0.0
     p_start.type = p_start.SPHERE
     p_start.color = green_color
-    # *** set all angles to 0.0 as dummy for now as I gotta figure out what obj type to use for waypoints viz, as waypoints shouldn't have any orientation **
-    # pose.orientation = Utils.angle_to_quaternion(0.0) 
+    p_start.pose.orientation = Utils.angle_to_quaternion(0.0) 
+    
+    rospy.sleep(0.5) 
+
     self.start_waypoint_pub.publish(p_start) 
 
     #good points: an array of waypoints
     for i in xrange(len(self.good_waypoint_pose)):
       config = self.good_waypoint_pose[i]
       marker = Marker()
-      marker.position.x = config[0]
-      marker.position.y = config[1]
-      marker.position.z = 0.0
+
+      marker.ns = 'good_waypoint'
+      marker.id = w_id
+      w_id += 1
+      marker.header.stamp = rospy.Time()
+      marker.action = marker.ADD
+      marker.scale.x = 0.35
+      marker.scale.y = 0.35
+      marker.scale.z = 0.1
+
+      marker.header.frame_id = "map"
+      marker.pose.position.x = config[0]
+      marker.pose.position.y = config[1]
+      marker.pose.position.z = 0.0
       marker.type = marker.SPHERE
       marker.color = blue_color
-      # *** same as above ***
-      # pose.orientation = Utils.angle_to_quaternion(0.0)
+      marker.pose.orientation = Utils.angle_to_quaternion(0.0)
       p_good.markers.append(marker)
+
+    rospy.sleep(0.5) 
     self.good_waypoint_pub.publish(p_good) 
 
     #bad points
     for i in xrange(len(self.bad_waypoint_pose)):
       config = self.bad_waypoint_pose[i]
       marker = Marker()
-      marker.position.x = config[0]
-      marker.position.y = config[1]
-      marker.position.z = 0.0
+
+      marker.ns = 'bad_waypoint'
+      marker.id = w_id
+      w_id += 1
+      marker.header.stamp = rospy.Time()
+      marker.action = marker.ADD
+      marker.scale.x = 0.35
+      marker.scale.y = 0.35
+      marker.scale.z = 0.1
+
+      marker.header.frame_id = "map"
+      marker.pose.position.x = config[0]
+      marker.pose.position.y = config[1]
+      marker.pose.position.z = 0.0
       marker.type = marker.SPHERE
       marker.color = red_color
-      # *** same as above ***
-      # pose.orientation = Utils.angle_to_quaternion(0.0)
+      marker.pose.orientation = Utils.angle_to_quaternion(0.0)
       p_bad.markers.append(marker)
+
+    rospy.sleep(0.5) 
     self.bad_waypoint_pub.publish(p_bad)
 
 
@@ -323,6 +359,12 @@ def L2dist(a, b): #return L2 distance between a and b
   pb = np.array(b)
   return np.linalg.norm(pa-pb)
 
+def waypoint_map2world(waypoints,mapinfo):
+  world_waypoints = []
+  for i in waypoints:
+    world_waypoints.append(Utils.map_to_world(i,mapinfo))
+  return world_waypoints
+
 #start_point and good_points are initially python list
 def get_pose_arr(start_point, good_points): 
   pose_arr = []
@@ -359,10 +401,18 @@ if __name__ == '__main__':
   csv_start = '/waypoints/real_car/start.csv'
   csv_good = '/waypoints/real_car/good_waypoints.csv'
   csv_bad = '/waypoints/real_car/bad_waypoints.csv'
+
+  mapinfo = rospy.ServiceProxy(map_service_name, GetMap)().map.info
   start_point = get_waypoint(csv_start)
+  start_point = waypoint_map2world(start_point, mapinfo)
   start_point = start_point[0][:]
+
   good_points = get_waypoint(csv_good)
+  good_points = waypoint_map2world(good_points, mapinfo)
+
   bad_points = get_waypoint(csv_bad)
+  bad_points = waypoint_map2world(bad_points, mapinfo)
+
   # print('start_point: ', start_point)
   # print('good_points: ', good_points)
   # print('bad_points: ', bad_points)
@@ -393,12 +443,13 @@ if __name__ == '__main__':
 
   pn.publish_waypoints_viz()
                    
-  if pub_topic is not None:
-      pn.plan_lock.acquire()
-      pn.final_plan()
-      pn.plan_lock.release()
+  # if pub_topic is not None:
+  #     pn.plan_lock.acquire()
+  #     pn.final_plan()
+  #     pn.plan_lock.release()
 
   while not rospy.is_shutdown():
+    # pn.publish_waypoints_viz()
     # if pub_topic is not None:
     #   pn.plan_lock.acquire()
     #   pn.update_plan()
