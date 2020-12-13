@@ -26,10 +26,7 @@ class PlannerNode(object):
                      halton_points, 
                      disc_radius,
                      collision_delta,                      
-                     source_topic,
-                     target_topic,
                      pub_topic,
-                     service_topic,
                      car_width,
                      car_length,
                      pose_arr,
@@ -53,14 +50,8 @@ class PlannerNode(object):
     self.environment = HaltonEnvironment(self.map_msg, graph_file, None, None, car_width, car_length, disc_radius, collision_delta)
     self.planner = HaltonPlanner(self.environment)
     
-    self.source_pose = None
-    self.source_updated = False
-    self.source_yaw = None
-    self.source_lock = Lock()
-    self.target_pose = None
-    self.target_updated = False
-    self.target_yaw = None
-    self.target_lock = Lock()
+    self.source_yaw = None #0
+    self.target_yaw = None #0
     
     self.cur_plan = None
     self.plan_lock = Lock()
@@ -77,74 +68,12 @@ class PlannerNode(object):
     self.good_waypoint_pub = rospy.Publisher(good_waypoint_topic, MarkerArray, queue_size=100)  
     self.bad_waypoint_pub = rospy.Publisher(bad_waypoint_topic, MarkerArray, queue_size=100) 
 
-    print('pub topic: ' + pub_topic)
+    print('pub topic: ', pub_topic)
     if pub_topic is not None:
-      self.plan_pub = rospy.Publisher(pub_topic, PoseArray, queue_size=1)  
-
-      self.source_sub = rospy.Subscriber(source_topic, 
-                                         PoseWithCovarianceStamped, 
-                                         self.source_cb,
-                                         queue_size=1)
-      self.target_sub = rospy.Subscriber(target_topic, 
-                                         PoseStamped, 
-                                         self.target_cb,
-                                         queue_size=1)          
+      self.plan_pub = rospy.Publisher(pub_topic, PoseArray, queue_size=1)          
     else:
       self.plan_pub = None
-                                         
-    if service_topic is not None:
-      self.plan_service = rospy.Service(service_topic, GetPlan, self.get_plan_cb)
-    else:
-      self.plan_service = None
-    
-    
     print '[Planner Node] Ready to plan'
-    
-  def get_plan_cb(self, req):
-    self.source_lock.acquire()
-    self.source_pose = req.source[:2]
-    self.source_yaw = req.source[2]
-    self.source_updated = True
-    self.source_lock.release()    
-    
-    self.target_lock.acquire()
-    self.target_pose = req.target[:2]
-    self.target_yaw = req.target[2]
-    self.target_updated = True
-    self.target_lock.release()
-    self.plan_lock.acquire()
-    self.update_plan()
-    self.plan_lock.release()
-    gpr = GetPlanResponse()
-    if self.cur_plan is not None:
-      gpr.plan = self.cur_plan.tolist()
-      gpr.success = True
-    else:
-      gpr.success = False
-    return gpr
-
-
-  def source_cb(self, msg):
-    self.source_lock.acquire()
-    
-    print '[Planner Node] Got new source'
-    self.source_pose = [msg.pose.pose.position.x,
-                        msg.pose.pose.position.y]
-    self.source_yaw = Utils.quaternion_to_angle(msg.pose.pose.orientation)
-    self.source_updated = True
-    
-    self.source_lock.release()
-    
-  def target_cb(self, msg):  
-    self.target_lock.acquire()
-    
-    print '[Planner Node] Got new target'
-    self.target_pose = [msg.pose.position.x,
-                        msg.pose.position.y]
-    self.target_yaw = Utils.quaternion_to_angle(msg.pose.orientation)
-    self.target_updated = True
-    
-    self.target_lock.release()    
     
   #green = start, blue = good points, red = bad points
   def publish_waypoints_viz(self): 
@@ -248,8 +177,6 @@ class PlannerNode(object):
     rospy.sleep(0.5) 
     self.bad_waypoint_pub.publish(p_bad)
 
-
-
   def publish_plan(self, plan):
     pa = PoseArray()
     pa.header.frame_id = "/map"
@@ -295,8 +222,8 @@ class PlannerNode(object):
   def final_plan(self):
     final_plan = []
     for i in range(0, len(self.pose_arr)-1):
-      source_pose = self.pose_arr[i]
-      target_pose = self.pose_arr[i+1]
+      source_pose = self.pose_arr[i][0:2]
+      target_pose = self.pose_arr[i+1][0:2]
 
       if(np.abs(source_pose-target_pose).sum() < sys.float_info.epsilon):
         print '[Planner Node] Source and target are the same, will not plan'
@@ -318,8 +245,13 @@ class PlannerNode(object):
       
       if temp_plan is not None:
         temp_plan = self.planner.post_process(temp_plan, 5)
+        if self.source_yaw is None or self.target_yaw is None:
+          self.source_yaw = 0
+          self.target_yaw = 0
         temp_plan = self.add_orientation(temp_plan)
-        print('[Planner Node] plan segment at index: ', i, ' complete')
+        self.source_yaw = temp_plan[-1][2]
+        self.target_yaw = temp_plan[-1][2]
+        print('[Planner Node] plan segment at index: ', i, ' and index ', i+1 ,'is finished, start to compute the path for the next segment')
       else:
         print('[Planner Node] plan segment at index: ', i, ' could not compute a plan')
 
@@ -327,12 +259,14 @@ class PlannerNode(object):
 
     plan_list = []
     for plan in final_plan:
-      for p_pose in plan:
-        plan_list.append(p_pose)
+      for i in range(1,len(plan)-3): #get rid of the 1st and the last few elements from each plan segment to avoid sharp orientation difference
+        plan_list.append(plan[i][:])
 
     self.cur_plan = np.array(plan_list)
 
     if (self.cur_plan is not None) and (self.plan_pub is not None): #this step is only for visualization of the final plan in rviz
+      rospy.sleep(0.5) 
+      print('[Planner Node] the whole plan is complete, publish plan to pub_topic')
       self.publish_plan(self.cur_plan) 
 
 #take a csv file path and return a list of waypoints
@@ -391,10 +325,7 @@ if __name__ == '__main__':
   halton_points = rospy.get_param("~halton_points", 500)
   disc_radius = rospy.get_param("~disc_radius", 3)
   collision_delta = rospy.get_param("~collision_delta", 0.05)  
-  source_topic = rospy.get_param("~source_topic" , "/initialpose")
-  target_topic = rospy.get_param("~target_topic", "/move_base_simple/goal")
   pub_topic = rospy.get_param("~pub_topic", "/PlannerNode/car_plan")
-  service_topic = rospy.get_param("~service_topic", "/plannerNode/srv")
   car_width = rospy.get_param("/car_kinematics/car_width", 0.33)
   car_length = rospy.get_param("/car_kinematics/car_length", 0.33)
 
@@ -413,10 +344,6 @@ if __name__ == '__main__':
   bad_points = get_waypoint(csv_bad)
   bad_points = waypoint_map2world(bad_points, mapinfo)
 
-  # print('start_point: ', start_point)
-  # print('good_points: ', good_points)
-  # print('bad_points: ', bad_points)
-
   start_waypoint_topic = "/waypoint/start"
   good_waypoint_topic = "/waypoint/good"
   bad_waypoint_topic = "/waypoint/bad"
@@ -427,10 +354,7 @@ if __name__ == '__main__':
                    halton_points, 
                    disc_radius,
                    collision_delta,                    
-                   source_topic,
-                   target_topic,
                    pub_topic,
-                   service_topic,
                    car_width,
                    car_length,
                    pose_arr,
@@ -443,15 +367,10 @@ if __name__ == '__main__':
 
   pn.publish_waypoints_viz()
                    
-  # if pub_topic is not None:
-  #     pn.plan_lock.acquire()
-  #     pn.final_plan()
-  #     pn.plan_lock.release()
+  if pub_topic is not None:
+    pn.plan_lock.acquire()
+    pn.final_plan()
+    pn.plan_lock.release()
 
   while not rospy.is_shutdown():
-    # pn.publish_waypoints_viz()
-    # if pub_topic is not None:
-    #   pn.plan_lock.acquire()
-    #   pn.update_plan()
-    #   pn.plan_lock.release()
     rospy.sleep(1.0) 
