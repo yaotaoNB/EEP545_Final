@@ -1,8 +1,8 @@
 <launch>
 
-   <node name="line_follower" pkg="final" type="line_follower.py" output="screen">
-        <param name="plan_topic" value="planner_node/car_plan" />
-        <param name="pose_topic" value="/car/pose" />
+   <node name="line_follower" pkg="lab3" type="line_follower.py" output="screen">
+        <param name="plan_topic" value="/planner_node/car_plan" />
+        <param name="pose_topic" value="/car/car_pose" />
         <param name="plan_lookahead" value="5" />
         <param name="translation_weight" value="1.0" />
         <param name="rotation_weight" value="0.3" />
