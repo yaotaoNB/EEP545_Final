@@ -325,7 +325,7 @@ if __name__ == '__main__':
   halton_points = rospy.get_param("~halton_points", 500)
   disc_radius = rospy.get_param("~disc_radius", 3)
   collision_delta = rospy.get_param("~collision_delta", 0.13)  
-  pub_topic = rospy.get_param("~pub_topic", "planner_node/car_plan")
+  pub_topic = rospy.get_param("~pub_topic", "planner_node/car_plan") ##for ma_server.launch viz planning path only, change this topic to "/PlannerNode/car_plan"
   car_width = rospy.get_param("/car_kinematics/car_width", 0.33)
   car_length = rospy.get_param("/car_kinematics/car_length", 0.33)
 
@@ -373,4 +373,6 @@ if __name__ == '__main__':
     pn.plan_lock.release()
 
   while not rospy.is_shutdown():
+    raw_input("Press Enter to publish car_plan...")
+    pn.publish_plan(pn.cur_plan)
     rospy.sleep(1.0) 

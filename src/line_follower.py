@@ -185,6 +185,8 @@ class LineFollower:
 
 
     def pose_cb(self, msg):
+        if self.plan is not None:
+            print('self.plan len: ', len(self.plan))
         if len(self.plan) == 0 and self.plt_finished is False:
             self.write2csv()
             print("err_hist wrote to csv.")
@@ -251,6 +253,7 @@ def main():
     for msg in rospy.wait_for_message('/planner_node/car_plan', PoseArray).poses:
         converted_plan.append([msg.position.x, msg.position.y, utils.quaternion_to_angle(msg.orientation)])
 
+    print('converted_plan len: ', len(converted_plan))
     # Create a LineFollower object
     LineFollower(converted_plan, pose_topic, plan_lookahead, translation_weight, rotation_weight, kp, ki, kd,
                  error_buff_length, speed)
