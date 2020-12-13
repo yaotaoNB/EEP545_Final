@@ -341,6 +341,11 @@ if __name__ == '__main__':
   good_points = get_waypoint(csv_good)
   good_points = waypoint_map2world(good_points, mapinfo)
 
+  #adding 3 intermediate points to avoid sharp turns
+  intermediate_points = np.array([[53.0,13.8, 0.0],[52.2, 15.6, 0.0],[42.68, 18.33, 0.0]])
+  for i in intermediate_points:
+    good_points.append(i)
+
   bad_points = get_waypoint(csv_bad)
   bad_points = waypoint_map2world(bad_points, mapinfo)
 
@@ -375,4 +380,6 @@ if __name__ == '__main__':
   while not rospy.is_shutdown():
     raw_input("Press Enter to publish car_plan...")
     pn.publish_plan(pn.cur_plan)
+    print('plan len: ', len(pn.cur_plan))
+    print('plan print: ', pn.cur_plan)
     rospy.sleep(1.0) 

@@ -82,15 +82,15 @@ class LineFollower:
         # If the configuration is in front of the robot, break out of the loop
         cur_pose_rot = utils.rotation_matrix(-1 * cur_pose[2])
 
-        # while len(self.plan) > 0:
-        #     offset = (self.plan[0][0:2] - cur_pose[0:2]).reshape(2, 1)
-        #     pose = cur_pose_rot * offset
-        #     pose.flatten()
-        #     # If the configuration is in front of the robot, break out of the loop
-        #     if pose[0] > 0:
-        #         break
-        #     # remove configuration that is behind the robot from the plan
-        #     self.plan.pop(0)
+        while len(self.plan) > 0:
+            offset = (self.plan[0][0:2] - cur_pose[0:2]).reshape(2, 1)
+            pose = cur_pose_rot * offset
+            pose.flatten()
+            # If the configuration is in front of the robot, break out of the loop
+            if pose[0] > 0:
+                break
+            # remove configuration that is behind the robot from the plan
+            self.plan.pop(0)
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
@@ -118,8 +118,8 @@ class LineFollower:
         # YOUR CODE HERE
         error = self.translation_weight * translation_error + self.rotation_weight * rotation_error
 
-        for i in range(goal_idx): #pop visited nodes in plan
-            self.plan.pop(0)
+        # for i in range(goal_idx): #pop visited nodes in plan
+        #     self.plan.pop(0)
 
         return True, error
 
@@ -188,8 +188,8 @@ class LineFollower:
 
 
     def pose_cb(self, msg):
-        if self.plan is not None:
-            print('self.plan len: ', len(self.plan))
+        # if self.plan is not None:
+        #     print('self.plan len: ', len(self.plan))
         if len(self.plan) == 0 and self.plt_finished is False:
             self.write2csv()
             print("err_hist wrote to csv.")
@@ -256,7 +256,8 @@ def main():
     for msg in rospy.wait_for_message('/planner_node/car_plan', PoseArray).poses:
         converted_plan.append([msg.position.x, msg.position.y, utils.quaternion_to_angle(msg.orientation)])
 
-    print('converted_plan len: ', len(converted_plan))
+    # print('converted_plan len: ', len(converted_plan))
+    # print('converted_plan print: ', converted_plan)
     # Create a LineFollower object
     LineFollower(converted_plan, pose_topic, plan_lookahead, translation_weight, rotation_weight, kp, ki, kd,
                  error_buff_length, speed)
