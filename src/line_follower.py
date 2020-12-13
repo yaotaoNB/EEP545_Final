@@ -81,16 +81,16 @@ class LineFollower:
         #   the configuration is in front or behind the robot
         # If the configuration is in front of the robot, break out of the loop
         cur_pose_rot = utils.rotation_matrix(-1 * cur_pose[2])
-        while len(self.plan) > 0:
-            offset = (self.plan[0][0:2] - cur_pose[0:2]).reshape(2, 1)
-            pose = cur_pose_rot * offset
-            pose.flatten()
-            # If the configuration is in front of the robot, break out of the loop
-            if pose[0] > 0:
-                break
 
-            # remove configuration that is behind the robot from the plan
-            self.plan.pop(0)
+        # while len(self.plan) > 0:
+        #     offset = (self.plan[0][0:2] - cur_pose[0:2]).reshape(2, 1)
+        #     pose = cur_pose_rot * offset
+        #     pose.flatten()
+        #     # If the configuration is in front of the robot, break out of the loop
+        #     if pose[0] > 0:
+        #         break
+        #     # remove configuration that is behind the robot from the plan
+        #     self.plan.pop(0)
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
@@ -117,6 +117,9 @@ class LineFollower:
         #   Be carefult about the sign of the rotation error
         # YOUR CODE HERE
         error = self.translation_weight * translation_error + self.rotation_weight * rotation_error
+
+        for i in range(goal_idx): #pop visited nodes in plan
+            self.plan.pop(0)
 
         return True, error
 
