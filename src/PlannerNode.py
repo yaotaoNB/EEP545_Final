@@ -324,8 +324,8 @@ if __name__ == '__main__':
   map_service_name = rospy.get_param("~static_map", "static_map")
   halton_points = rospy.get_param("~halton_points", 500)
   disc_radius = rospy.get_param("~disc_radius", 3)
-  collision_delta = rospy.get_param("~collision_delta", 0.05)  
-  pub_topic = rospy.get_param("~pub_topic", "/PlannerNode/car_plan")
+  collision_delta = rospy.get_param("~collision_delta", 0.13)  
+  pub_topic = rospy.get_param("~pub_topic", "planner_node/car_plan")
   car_width = rospy.get_param("/car_kinematics/car_width", 0.33)
   car_length = rospy.get_param("/car_kinematics/car_length", 0.33)
 

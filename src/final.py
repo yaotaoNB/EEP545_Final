@@ -11,4 +11,8 @@ def car_dist2bad(): #this function measure the distance of the car to each bad w
 	# ...
 
 if __name__ == '__main__':
-	# ...
+  rospy.init_node('final', anonymous=True)
+  speed = rospy.get_param("~speed", "1.0")
+
+  while not rospy.is_shutdown():
+    rospy.sleep(1.0) 
