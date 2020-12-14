@@ -5,18 +5,25 @@ import sys
 
 import rospy
 import numpy as np
-from geometry_msgs.msg import PoseArray, PoseStamped
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped
 from ackermann_msgs.msg import AckermannDriveStamped
 
 import utils
+import Utils
 
 # The topic to publish control commands to
 PUB_TOPIC = '/car/mux/ackermann_cmd_mux/input/navigation'
 
+cur_plan_viz_topic = '/plan/cur_plan_viz' #visualizing the current plan for debugging purposes
 '''
 Follows a given plan using constant velocity and PID control of the steering angle
 '''
 
+# a or b are np.array with 2 elements like this: [x, y]
+def L2dist(a, b): #return L2/eucleadian distance between a and b
+  pa = np.array(a)
+  pb = np.array(b)
+  return np.linalg.norm(pa-pb)
 
 class LineFollower:
     '''
@@ -65,12 +72,28 @@ class LineFollower:
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb,
                                          queue_size=10)  # Create a subscriber to pose_topic, with callback 'self.pose_cb'
 
+        self.cur_plan_viz_pub = rospy.Publisher(cur_plan_viz_topic, PoseArray, self.cur_plan_viz_cb,
+                                         queue_size=10)
     '''
     Computes the error based on the current pose of the car
       cur_pose: The current pose of the car, represented as a numpy array [x,y,theta]
     Returns: (False, 0.0) if the end of the plan has been reached. Otherwise, returns
              (True, E) - where E is the computed error
     '''
+
+    def cur_plan_viz_cb(self):
+        if self.plan is not None:
+          pa = PoseArray()
+          pa.header.frame_id = "/map"
+          for i in xrange(len(self.plan)):
+            config = self.plan[i]
+            pose = Pose()
+            pose.position.x = config[0]
+            pose.position.y = config[1]
+            pose.position.z = 0.0
+            pose.orientation = Utils.angle_to_quaternion(config[2])
+            pa.poses.append(pose)
+          self.cur_plan_viz_pub.publish(pa)
 
     def compute_error(self, cur_pose):
         # Find the first element of the plan that is in front of the robot, and remove
@@ -86,15 +109,18 @@ class LineFollower:
             offset = (self.plan[0][0:2] - cur_pose[0:2]).reshape(2, 1)
             pose = cur_pose_rot * offset
             pose.flatten()
-            # If the configuration is in front of the robot, break out of the loop
-            if pose[0] > 0:
+            # If the configuration is in front of the robot or plan pose is too far from cur pose, break out of the loop
+            plan_pop_treshold = 10 # treshold distance for popping a plan element
+            if pose[0] > 0 or L2dist(cur_pose[0:2], self.plan[0][0:2]) > plan_pop_treshold:
                 break
             # remove configuration that is behind the robot from the plan
+            self.cur_plan_viz_cb()
             self.plan.pop(0)
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
         if len(self.plan) == 0:
+            print('car plan is now empty.')
             return False, 0.0
 
         # At this point, we have removed configurations from the plan that are behind
