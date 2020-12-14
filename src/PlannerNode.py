@@ -342,7 +342,7 @@ if __name__ == '__main__':
   good_points = waypoint_map2world(good_points, mapinfo)
 
   #adding 3 intermediate points to avoid sharp turns
-  intermediate_points = np.array([[53.0,13.8, 0.0],[52.2, 15.6, 0.0],[42.68, 18.33, 0.0]])
+  intermediate_points = np.array([])
   for i in intermediate_points:
     good_points.append(i)
 

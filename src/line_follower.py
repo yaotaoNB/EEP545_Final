@@ -8,8 +8,8 @@ import numpy as np
 from geometry_msgs.msg import Pose, PoseArray, PoseStamped
 from ackermann_msgs.msg import AckermannDriveStamped
 
-import utils
 import Utils
+import math
 
 # The topic to publish control commands to
 PUB_TOPIC = '/car/mux/ackermann_cmd_mux/input/navigation'
@@ -96,58 +96,31 @@ class LineFollower:
           self.cur_plan_viz_pub.publish(pa)
 
     def compute_error(self, cur_pose):
-        # Find the first element of the plan that is in front of the robot, and remove
-        # any elements that are behind the robot. To do this:
-        # Loop over the plan (starting at the beginning) For each configuration in the plan
-        # If the configuration is behind the robot, remove it from the plan
-        #   Will want to perform a coordinate transformation to determine if
-        #   the configuration is in front or behind the robot
-        # If the configuration is in front of the robot, break out of the loop
-        cur_pose_rot = utils.rotation_matrix(-1 * cur_pose[2])
+	    while len(self.plan) > 0:
+		rot = np.array(np.matmul(Utils.rotation_matrix(np.pi/2 - cur_pose[2]), [[self.plan[0][0] - cur_pose[0]],[self.plan[0][1] - cur_pose[1]]]))
+		if (self.plan[0][0] - cur_pose[0]) < 0:  
+		    if math.sqrt((self.plan[1][0] - cur_pose[0])**2 + (self.plan[1][1] - cur_pose[1])**2) < math.sqrt((self.plan[0][0] - cur_pose[0])**2 + (self.plan[0][1] - cur_pose[1])**2) :    
+		        self.plan.pop(0)
+		    else:
+		        break
+		else:
+		    if 0 > rot[1]:
+		        self.plan.pop(0)
+		    else:
+		        break
+		if self.plan == 0:
+		    return (False, 0.0)
 
-        while len(self.plan) > 0:
-            offset = (self.plan[0][0:2] - cur_pose[0:2]).reshape(2, 1)
-            pose = cur_pose_rot * offset
-            pose.flatten()
-            # If the configuration is in front of the robot or plan pose is too far from cur pose, break out of the loop
-            plan_pop_treshold = 10 # treshold distance for popping a plan element
-            if pose[0] > 0 or L2dist(cur_pose[0:2], self.plan[0][0:2]) > plan_pop_treshold:
-                break
-            # remove configuration that is behind the robot from the plan
-            self.cur_plan_viz_cb()
-            self.plan.pop(0)
+	    goal_idx = min(0+self.plan_lookahead, len(self.plan)-1)
+	    translation_error = -np.array(np.matmul(Utils.rotation_matrix(np.pi/2 - cur_pose[2]), np.array([[self.plan[int(goal_idx)][0] - cur_pose[0]], [self.plan[int(goal_idx)][1] - cur_pose[1]]])))[0]
+	    if self.plan[int(goal_idx)][2] < 0 and cur_pose[2] > 0:
+		rotation_error = (np.pi - abs(self.plan[int(goal_idx)][2])) + (np.pi - cur_pose[2])
+	    elif self.plan[int(goal_idx)][2] > 0 and cur_pose[2] < 0:
+		rotation_error = -1 * ((np.pi - abs(cur_pose[2])) + (np.pi - self.plan[int(goal_idx)][2]))
+	    else:
+		rotation_error = self.plan[int(goal_idx)][2] - cur_pose[2]
 
-        # Check if the plan is empty. If so, return (False, 0.0)
-        # YOUR CODE HERE
-        if len(self.plan) == 0:
-            print('car plan is now empty.')
-            return False, 0.0
-
-        # At this point, we have removed configurations from the plan that are behind
-        # the robot. Therefore, element 0 is the first configuration in the plan that is in
-        # front of the robot. To allow the robot to have some amount of 'look ahead',
-        # we choose to have the robot head towards the configuration at index 0 + self.plan_lookahead
-        # We call this index the goal_index
-        goal_idx = min(0 + self.plan_lookahead, len(self.plan) - 1)
-
-        # Compute the translation error between the robot and the configuration at goal_idx in the plan
-        # YOUR CODE HERE
-        goal_offset = (self.plan[goal_idx][0:2] - cur_pose[0:2]).reshape(2, 1)
-        translation_error = cur_pose_rot * goal_offset
-        translation_error.flatten()
-        translation_error = translation_error[1]
-        # Compute the total error
-        # Translation error was computed above
-        # Rotation error is the difference in yaw between the robot and goal configuration
-        rotation_error = self.plan[goal_idx][2] - cur_pose[2]
-        #   Be carefult about the sign of the rotation error
-        # YOUR CODE HERE
-        error = self.translation_weight * translation_error + self.rotation_weight * rotation_error
-
-        # for i in range(goal_idx): #pop visited nodes in plan
-        #     self.plan.pop(0)
-
-        return True, error
+	    return True, (self.translation_weight * translation_error + self.rotation_weight * rotation_error)
 
     '''
     Uses a PID control policy to generate a steering angle from the passed error
@@ -156,62 +129,8 @@ class LineFollower:
     '''
 
     def compute_steering_angle(self, error):
-        now = rospy.Time.now().to_sec()  # Get the current time
-
-        # Compute the derivative error using the passed error, the current time,
-        # the most recent error stored in self.error_buff, and the most recent time
-        # stored in self.error_buff
-        # YOUR CODE HERE
-
-        # deriv(e) = dy/dx
-        # calculates the derivative when the list is not empty
-        deriv_error = 0.0
-        if len(self.error_buff) != 0:
-            # dx = x2-x1
-            dy = error - self.error_buff[-1][0]
-            dx = now - self.error_buff[-1][1]
-            deriv_error = dy / dx
-
-        # Add the current error to the buffer
-        self.error_buff.append((error, now))
-
-        # Compute the integral error by applying rectangular integration to the elements
-        # of self.error_buff: https://chemicalstatistician.wordpress.com/2014/01/20/rectangular-integration-a-k-a-the-midpoint-rule/
-        # YOUR CODE HERE
-
-        # integral(e) = sum(area of rectangle)
-        # = sum(base * height)
-        # =  sum(x_(i+1) - x_i) * f(0.5(x_i + x_(i+1))
-
-        # initialize the integral error
-        integ_error = 0.0
-
-        # calculating interal
-        for i in range(len(self.error_buff) - 1):
-            # base = time_(i+1) - time_i
-            base = self.error_buff[i + 1][1] - self.error_buff[i][1]
-            # height = 0.5*(error_i + error_(i+1))
-            height = 0.5 * (self.error_buff[i][0] + self.error_buff[i + 1][0])
-            area = base * height
-            integ_error += area
-
-        # Compute the steering angle as the sum of the pid errors
-        # YOUR CODE HERE
-        return self.kp * error + self.ki * integ_error + self.kd * deriv_error
-
-    # !!! please fix: steering_angle should be a number in radian but compute_steering_angle is returning a matrix !!!
-
-    '''
-    Callback for the current pose of the car
-      msg: A PoseStamped representing the current pose of the car
-      This is the exact callback that we used in our solution, but feel free to change it
-    '''
-
-    def write2csv(self):
-        dir = "/home/robot/catkin_ws/src/lab3/err_csv/"
-        filename = 'Kp: '+ str(self.kp)+'; Ki: '+str(self.ki)+'; Kd: '+str(self.kd)+'; trans w: '+str(round(self.translation_weight,2))+'; rot w: '+str(round(self.rotation_weight,2))+".csv"
-        np.savetxt(dir+filename, np.asarray(self.err_hist), delimiter=",")
-
+	    self.error_buff.append((error, rospy.Time.now().to_sec()))
+	    return self.kp * error + self.ki * (0.5 * (error**2)) + self.kd * (error - self.error_buff[0][0])
 
     def pose_cb(self, msg):
         # if self.plan is not None:
@@ -224,7 +143,7 @@ class LineFollower:
 
         cur_pose = np.array([msg.pose.position.x,
                              msg.pose.position.y,
-                             utils.quaternion_to_angle(msg.pose.orientation)])
+                             Utils.quaternion_to_angle(msg.pose.orientation)])
         success, error = self.compute_error(cur_pose)
 
         self.err_hist.append(error)
@@ -246,6 +165,17 @@ class LineFollower:
 
         # Send the control message
         self.cmd_pub.publish(ads)
+
+    '''
+    Callback for the current pose of the car
+      msg: A PoseStamped representing the current pose of the car
+      This is the exact callback that we used in our solution, but feel free to change it
+    '''
+
+    def write2csv(self):
+        dir = "/home/robot/catkin_ws/src/lab3/err_csv/"
+        filename = 'Kp: '+ str(self.kp)+'; Ki: '+str(self.ki)+'; Kd: '+str(self.kd)+'; trans w: '+str(round(self.translation_weight,2))+'; rot w: '+str(round(self.rotation_weight,2))+".csv"
+        np.savetxt(dir+filename, np.asarray(self.err_hist), delimiter=",")
 
 
 def main():
@@ -280,7 +210,7 @@ def main():
     print('start to load plan from topic: ', plan_topic)
     converted_plan = []
     for msg in rospy.wait_for_message('/planner_node/car_plan', PoseArray).poses:
-        converted_plan.append([msg.position.x, msg.position.y, utils.quaternion_to_angle(msg.orientation)])
+        converted_plan.append([msg.position.x, msg.position.y, Utils.quaternion_to_angle(msg.orientation)])
 
     # print('converted_plan len: ', len(converted_plan))
     # print('converted_plan print: ', converted_plan)
