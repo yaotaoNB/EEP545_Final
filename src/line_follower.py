@@ -5,7 +5,7 @@ import sys
 
 import rospy
 import numpy as np
-from geometry_msgs.msg import Pose, PoseArray, PoseStamped
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped, PoseWithCovarianceStamped, PoseWithCovariance 
 from ackermann_msgs.msg import AckermannDriveStamped
 
 import Utils
@@ -13,8 +13,7 @@ import math
 
 # The topic to publish control commands to
 PUB_TOPIC = '/car/mux/ackermann_cmd_mux/input/navigation'
-
-cur_plan_viz_topic = '/plan/cur_plan_viz' #visualizing the current plan for debugging purposes
+initialpose_topic = '/initialpose'
 '''
 Follows a given plan using constant velocity and PID control of the steering angle
 '''
@@ -24,6 +23,11 @@ def L2dist(a, b): #return L2/eucleadian distance between a and b
   pa = np.array(a)
   pb = np.array(b)
   return np.linalg.norm(pa-pb)
+
+# class to ignore error messages
+class DevNull:
+  def write(self, msg):
+    pass
 
 class LineFollower:
     '''
@@ -71,29 +75,12 @@ class LineFollower:
                                      queue_size=10)  # Create a publisher to PUB_TOPIC
       self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb,
                                        queue_size=10)  # Create a subscriber to pose_topic, with callback 'self.pose_cb'
-
-      self.cur_plan_viz_pub = rospy.Publisher(cur_plan_viz_topic, PoseArray, self.cur_plan_viz_cb,
-                                       queue_size=10)
     '''
     Computes the error based on the current pose of the car
       cur_pose: The current pose of the car, represented as a numpy array [x,y,theta]
     Returns: (False, 0.0) if the end of the plan has been reached. Otherwise, returns
              (True, E) - where E is the computed error
     '''
-
-    def cur_plan_viz_cb(self):
-        if self.plan is not None:
-          pa = PoseArray()
-          pa.header.frame_id = "/map"
-          for i in xrange(len(self.plan)):
-            config = self.plan[i]
-            pose = Pose()
-            pose.position.x = config[0]
-            pose.position.y = config[1]
-            pose.position.z = 0.0
-            pose.orientation = Utils.angle_to_quaternion(config[2])
-            pa.poses.append(pose)
-          self.cur_plan_viz_pub.publish(pa)
 
     def compute_error(self, cur_pose):
       while len(self.plan) > 0:
@@ -113,7 +100,6 @@ class LineFollower:
 
       if len(self.plan) <= 0 or goal_idx < 0:
         return (False, 0.0)
-        
       translation_error = -np.array(np.matmul(Utils.rotation_matrix(np.pi/2 - cur_pose[2]), np.array([[self.plan[int(goal_idx)][0] - cur_pose[0]], [self.plan[int(goal_idx)][1] - cur_pose[1]]])))[0]
       if self.plan[int(goal_idx)][2] < 0 and cur_pose[2] > 0:
         rotation_error = (np.pi - abs(self.plan[int(goal_idx)][2])) + (np.pi - cur_pose[2])
@@ -135,38 +121,36 @@ class LineFollower:
       return self.kp * error + self.ki * (0.5 * (error**2)) + self.kd * (error - self.error_buff[0][0])
 
     def pose_cb(self, msg):
-      # if self.plan is not None:
-      #     print('self.plan len: ', len(self.plan))
-      if len(self.plan) == 0 and self.plt_finished is False:
-        self.write2csv()
-        print("err_hist wrote to csv.")
-        self.plt_finished = True
+      if len(self.plan) <= 0: #and self.plt_finished is False:
+        # self.write2csv()
+        # print("err_hist wrote to csv.")
+        # self.plt_finished = True
         pass
+      elif len(self.plan) > 0:
+        cur_pose = np.array([msg.pose.position.x,
+                             msg.pose.position.y,
+                             Utils.quaternion_to_angle(msg.pose.orientation)])
+        success, error = self.compute_error(cur_pose)
 
-      cur_pose = np.array([msg.pose.position.x,
-                           msg.pose.position.y,
-                           Utils.quaternion_to_angle(msg.pose.orientation)])
-      success, error = self.compute_error(cur_pose)
+        self.err_hist.append(error)
 
-      self.err_hist.append(error)
+        if not success:
+          # We have reached our goal
+          self.pose_sub = None  # Kill the subscriber
+          self.speed = 0.0  # Set speed to zero so car stops
 
-      if not success:
-        # We have reached our goal
-        self.pose_sub = None  # Kill the subscriber
-        self.speed = 0.0  # Set speed to zero so car stops
+        # !!! please fix: steering_angle should be a number in radian but compute_steering_angle is returning a matrix !!!
+        delta = self.compute_steering_angle(error)
 
-      # !!! please fix: steering_angle should be a number in radian but compute_steering_angle is returning a matrix !!!
-      delta = self.compute_steering_angle(error)
+        # Setup the control message
+        ads = AckermannDriveStamped()
+        ads.header.frame_id = '/map'
+        ads.header.stamp = rospy.Time.now()
+        ads.drive.steering_angle = delta
+        ads.drive.speed = self.speed
 
-      # Setup the control message
-      ads = AckermannDriveStamped()
-      ads.header.frame_id = '/map'
-      ads.header.stamp = rospy.Time.now()
-      ads.drive.steering_angle = delta
-      ads.drive.speed = self.speed
-
-      # Send the control message
-      self.cmd_pub.publish(ads)
+        # Send the control message
+        self.cmd_pub.publish(ads)
 
     '''
     Callback for the current pose of the car
@@ -181,6 +165,8 @@ class LineFollower:
 
 
 def main():
+  # sys.stderr = DevNull() #ignore error messages
+
   rospy.init_node('line_follower', anonymous=True)  # Initialize the node
 
   # Load these parameters from launch file
@@ -201,21 +187,34 @@ def main():
   error_buff_length = rospy.get_param('~error_buff_length', 10)  # Starting val: 10
   speed = rospy.get_param('~speed', 1.0)  # Default val: 1.0
 
-  raw_input("Press Enter to when plan available...")  # Waits for ENTER key press
-
+  print('set the car initialpose to the start waypoint')
+  initialpose_pub = rospy.Publisher(initialpose_topic, PoseWithCovarianceStamped, 
+                                       queue_size=10)
+  pcs = PoseWithCovarianceStamped()
+  pcs.header.frame_id = "map"
+  pcs.header.stamp = rospy.Time()
+  pcs.pose.pose.position.x = 49.9
+  pcs.pose.pose.position.y = 11.938
+  pcs.pose.pose.position.z = 0.0
+  pcs.pose.pose.orientation.x = 0.0
+  pcs.pose.pose.orientation.y = 0.0
+  pcs.pose.pose.orientation.z = -0.105
+  pcs.pose.pose.orientation.w = 0.995
+  rospy.sleep(1.0) 
+  initialpose_pub.publish(pcs)
   # Use rospy.wait_for_message to get the plan msg
   # Convert the plan msg to a list of 3-element numpy arrays
   #     Each array is of the form [x,y,theta]
   # Create a LineFollower object
   # YOUR CODE HERE
   # rostopic info /planner_node/car_plan Type: geometry_msgs/PoseArray
-  print('start to load plan from topic: ', plan_topic)
+  print('waiting for the plan to be published from PlannerNode, plan_topic:  ', plan_topic)
   converted_plan = []
   for msg in rospy.wait_for_message('/planner_node/car_plan', PoseArray).poses:
     converted_plan.append([msg.position.x, msg.position.y, Utils.quaternion_to_angle(msg.orientation)])
 
-  # print('converted_plan len: ', len(converted_plan))
-  # print('converted_plan print: ', converted_plan)
+  print('plan is received, car starts to drive along the plan...')
+  # raw_input("Press Enter to start the car driving along the planned path...")  # Waits for ENTER key press
   # Create a LineFollower object
   LineFollower(converted_plan, pose_topic, plan_lookahead, translation_weight, rotation_weight, kp, ki, kd,
                error_buff_length, speed)
