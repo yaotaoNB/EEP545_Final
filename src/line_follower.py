@@ -8,6 +8,8 @@ import numpy as np
 from geometry_msgs.msg import Pose, PoseArray, PoseStamped, PoseWithCovarianceStamped, PoseWithCovariance 
 from ackermann_msgs.msg import AckermannDriveStamped
 
+from visualization_msgs.msg import Marker, MarkerArray # for measuring distances from true car_pose to each waypoint
+
 import Utils
 import math
 
@@ -75,12 +77,63 @@ class LineFollower:
                                      queue_size=10)  # Create a publisher to PUB_TOPIC
       self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb,
                                        queue_size=10)  # Create a subscriber to pose_topic, with callback 'self.pose_cb'
+
+      # min distances measurement from true car pose to every waypoint
+      self.good_points = None # this will be a np.array
+      self.bad_points = None #this will be a np.array
+      self.good_distances = None
+      self.bad_distances = None
+      good_waypoint_topic = "/waypoint/good"
+      bad_waypoint_topic = "/waypoint/bad"
+      self.carpose2waypoints_sub = rospy.Subscriber('/car/car_pose', PoseStamped, self.dist2waypoints,
+                                       queue_size=10) 
+      self.dist2good_sub = rospy.Subscriber(good_waypoint_topic, MarkerArray, self.dist2good_cb,
+                                       queue_size=10)  
+      self.dist2bad_sub = rospy.Subscriber(bad_waypoint_topic, MarkerArray, self.dist2bad_cb,
+                                       queue_size=10)  
+
     '''
     Computes the error based on the current pose of the car
       cur_pose: The current pose of the car, represented as a numpy array [x,y,theta]
     Returns: (False, 0.0) if the end of the plan has been reached. Otherwise, returns
              (True, E) - where E is the computed error
     '''
+    def dist2good_cb(self, msg):
+      if self.good_points is None:
+        temp = []
+        for marker in msg.markers:
+          xy_pose = [marker.pose.position.x, marker.pose.position.y]
+          temp.append(xy_pose)
+        self.good_points = np.array(temp)
+        self.good_distances = np.full(len(self.good_points), 99999.9)
+
+    def dist2bad_cb(self, msg):
+      if self.bad_points is None:
+        temp = []
+        for marker in msg.markers:
+          xy_pose = [marker.pose.position.x, marker.pose.position.y]
+          temp.append(xy_pose)
+        self.bad_points = np.array(temp)
+        self.bad_distances = np.full(len(self.bad_points), 99999.9)
+
+    def dist2waypoints(self, msg): #measure car pose to every
+      if self.good_distances is not None and self.bad_distances is not None:
+        cur_carpose = np.array([msg.pose.position.x, msg.pose.position.y])
+        for i in range(len(self.good_distances)):
+          d = L2dist(cur_carpose, self.good_points[i])
+          if d < self.good_distances[i]:
+            self.good_distances[i] = d
+
+        for i in range(len(self.bad_distances)):
+          d = L2dist(cur_carpose, self.bad_points[i])
+          if d < self.bad_distances[i]:
+            self.bad_distances[i] = d
+
+    def report_mindist_car2waypoints(self):
+      for i in range(len(self.good_distances)):
+        print('the min distance from true car_pose to goodpoint ', i, ' is: ', self.good_distances[i])
+      for i in range(len(self.bad_distances)):
+        print('the min distance from true car_pose to badpoint ', i, ' is: ', self.bad_distances[i])
 
     def compute_error(self, cur_pose):
       while len(self.plan) > 0:
@@ -99,6 +152,7 @@ class LineFollower:
       goal_idx = min(0+self.plan_lookahead, len(self.plan)-1)
 
       if len(self.plan) <= 0 or goal_idx < 0:
+        self.report_mindist_car2waypoints()
         return (False, 0.0)
       translation_error = -np.array(np.matmul(Utils.rotation_matrix(np.pi/2 - cur_pose[2]), np.array([[self.plan[int(goal_idx)][0] - cur_pose[0]], [self.plan[int(goal_idx)][1] - cur_pose[1]]])))[0]
       if self.plan[int(goal_idx)][2] < 0 and cur_pose[2] > 0:

@@ -342,7 +342,7 @@ if __name__ == '__main__':
   good_points = waypoint_map2world(good_points, mapinfo)
 
   #adding 3 intermediate points to avoid sharp turns
-  intermediate_points = np.array([])
+  intermediate_points = np.array([]) # [52.76, 14.56, 0.0]
   for i in intermediate_points:
     good_points.append(i)
 
@@ -380,6 +380,7 @@ if __name__ == '__main__':
   while not rospy.is_shutdown():
     raw_input("Press Enter to publish car_plan...")
     pn.publish_plan(pn.cur_plan)
+    pn.publish_waypoints_viz()
     print('planned is published to topic planner_node/car_plan')
     # print('plan len: ', len(pn.cur_plan))
     # print('plan print: ', pn.cur_plan)
