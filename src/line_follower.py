@@ -165,7 +165,7 @@ class LineFollower:
 
 
 def main():
-  # sys.stderr = DevNull() #ignore error messages
+  sys.stderr = DevNull() #ignore error messages
 
   rospy.init_node('line_follower', anonymous=True)  # Initialize the node
 
@@ -177,7 +177,7 @@ def main():
   # 'Starting' values are ones you should consider tuning for your system
   # YOUR CODE HERE
   plan_topic = rospy.get_param('~plan_topic', '/planner_node/car_plan')  # Default val: '/planner_node/car_plan'
-  pose_topic = rospy.get_param('~pose_topic', '/car/pose')  # Default val: '/car/pose'
+  pose_topic = rospy.get_param('~pose_topic', 'pf/viz/inferred_pose')  # pf/viz/inferred_pose from particle filter, '/car/car_pose' from map ground truth
   plan_lookahead = rospy.get_param('plan_lookahead', 5)  # Starting val: 5
   translation_weight = rospy.get_param('~translation_weight', 1.0)  # Starting val: 1.0
   rotation_weight = rospy.get_param('~rotation_weight', 0.0)  # Starting val: 0.0
