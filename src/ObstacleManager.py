@@ -1,7 +1,7 @@
 import cv2
 import math
 import numpy
-import Utils
+import utils
 import csv
 import os
 from pathlib import Path
@@ -54,7 +54,7 @@ class ObstacleManager(object):
   def get_state_validity(self, config):
 
     # Convert the configuration to map-coordinates -> mapConfig is in pixel-space
-    mapConfig = Utils.world_to_map(config, self.map_info)
+    mapConfig = utils.world_to_map_r(config, self.map_info)
     
 
     # ---------------------------------------------------------

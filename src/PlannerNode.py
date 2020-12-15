@@ -14,7 +14,7 @@ from lab5.srv import *
 from HaltonPlanner import HaltonPlanner
 from HaltonEnvironment import HaltonEnvironment
 import GraphGenerator
-import Utils
+import utils
 
 import csv
 import os
@@ -119,7 +119,7 @@ class PlannerNode(object):
     p_start.pose.position.z = 0.0
     p_start.type = p_start.SPHERE
     p_start.color = green_color
-    p_start.pose.orientation = Utils.angle_to_quaternion(0.0) 
+    p_start.pose.orientation = utils.angle_to_quaternion(0.0) 
     
     rospy.sleep(0.5) 
 
@@ -145,7 +145,7 @@ class PlannerNode(object):
       marker.pose.position.z = 0.0
       marker.type = marker.SPHERE
       marker.color = blue_color
-      marker.pose.orientation = Utils.angle_to_quaternion(0.0)
+      marker.pose.orientation = utils.angle_to_quaternion(0.0)
       p_good.markers.append(marker)
 
     rospy.sleep(0.5) 
@@ -171,7 +171,7 @@ class PlannerNode(object):
       marker.pose.position.z = 0.0
       marker.type = marker.SPHERE
       marker.color = red_color
-      marker.pose.orientation = Utils.angle_to_quaternion(0.0)
+      marker.pose.orientation = utils.angle_to_quaternion(0.0)
       p_bad.markers.append(marker)
 
     rospy.sleep(0.5) 
@@ -186,7 +186,7 @@ class PlannerNode(object):
       pose.position.x = config[0]
       pose.position.y = config[1]
       pose.position.z = 0.0
-      pose.orientation = Utils.angle_to_quaternion(config[2])
+      pose.orientation = utils.angle_to_quaternion(config[2])
       pa.poses.append(pose)
     self.plan_pub.publish(pa) 
 
@@ -296,7 +296,7 @@ def L2dist(a, b): #return L2 distance between a and b
 def waypoint_map2world(waypoints,mapinfo):
   world_waypoints = []
   for i in waypoints:
-    world_waypoints.append(Utils.map_to_world(i,mapinfo))
+    world_waypoints.append(utils.map_to_world_r(i,mapinfo))
   return world_waypoints
 
 #start_point and good_points are initially python list

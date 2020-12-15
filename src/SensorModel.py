@@ -8,7 +8,7 @@ from threading import Lock
 from nav_msgs.srv import GetMap
 import rosbag
 import matplotlib.pyplot as plt
-import utils as Utils
+import utils
 from sensor_msgs.msg import LaserScan
 
 THETA_DISCRETIZATION = 112 # Discretization of scanning angle
@@ -237,7 +237,7 @@ if __name__ == '__main__':
     particles[i*(particles.shape[0]/angle_step):(i+1)*(particles.shape[0]/angle_step),1] = permissible_x[:]
     particles[i*(particles.shape[0]/angle_step):(i+1)*(particles.shape[0]/angle_step),2] = i*(2*np.pi / angle_step)
   
-  Utils.map_to_world(particles, map_info)
+  utils.map_to_world(particles, map_info)
   weights = np.ones(particles.shape[0]) / float(particles.shape[0])
   
   print 'Initializing sensor model'

@@ -10,7 +10,7 @@ from ackermann_msgs.msg import AckermannDriveStamped
 
 from visualization_msgs.msg import Marker, MarkerArray # for measuring distances from true car_pose to each waypoint
 
-import Utils
+import utils
 import math
 
 # The topic to publish control commands to
@@ -137,7 +137,7 @@ class LineFollower:
 
     def compute_error(self, cur_pose):
       while len(self.plan) > 0:
-        rot = np.array(np.matmul(Utils.rotation_matrix(np.pi/2 - cur_pose[2]), [[self.plan[0][0] - cur_pose[0]],[self.plan[0][1] - cur_pose[1]]]))
+        rot = np.array(np.matmul(utils.rotation_matrix(np.pi/2 - cur_pose[2]), [[self.plan[0][0] - cur_pose[0]],[self.plan[0][1] - cur_pose[1]]]))
         if (self.plan[0][0] - cur_pose[0]) < 0:  
           if math.sqrt((self.plan[1][0] - cur_pose[0])**2 + (self.plan[1][1] - cur_pose[1])**2) < math.sqrt((self.plan[0][0] - cur_pose[0])**2 + (self.plan[0][1] - cur_pose[1])**2) :    
             self.plan.pop(0)
@@ -154,7 +154,7 @@ class LineFollower:
       if len(self.plan) <= 0 or goal_idx < 0:
         self.report_mindist_car2waypoints()
         return (False, 0.0)
-      translation_error = -np.array(np.matmul(Utils.rotation_matrix(np.pi/2 - cur_pose[2]), np.array([[self.plan[int(goal_idx)][0] - cur_pose[0]], [self.plan[int(goal_idx)][1] - cur_pose[1]]])))[0]
+      translation_error = -np.array(np.matmul(utils.rotation_matrix(np.pi/2 - cur_pose[2]), np.array([[self.plan[int(goal_idx)][0] - cur_pose[0]], [self.plan[int(goal_idx)][1] - cur_pose[1]]])))[0]
       if self.plan[int(goal_idx)][2] < 0 and cur_pose[2] > 0:
         rotation_error = (np.pi - abs(self.plan[int(goal_idx)][2])) + (np.pi - cur_pose[2])
       elif self.plan[int(goal_idx)][2] > 0 and cur_pose[2] < 0:
@@ -183,7 +183,7 @@ class LineFollower:
       elif len(self.plan) > 0:
         cur_pose = np.array([msg.pose.position.x,
                              msg.pose.position.y,
-                             Utils.quaternion_to_angle(msg.pose.orientation)])
+                             utils.quaternion_to_angle(msg.pose.orientation)])
         success, error = self.compute_error(cur_pose)
 
         self.err_hist.append(error)
@@ -266,7 +266,7 @@ def main():
   print('waiting for the plan to be published from PlannerNode, plan_topic:  ', plan_topic)
   converted_plan = []
   for msg in rospy.wait_for_message('/planner_node/car_plan', PoseArray).poses:
-    converted_plan.append([msg.position.x, msg.position.y, Utils.quaternion_to_angle(msg.orientation)])
+    converted_plan.append([msg.position.x, msg.position.y, utils.quaternion_to_angle(msg.orientation)])
 
   print('plan is received, car starts to drive along the plan...')
   # Create a LineFollower object

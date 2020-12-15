@@ -3,7 +3,7 @@
 import rospy 
 import numpy as np
 import time
-import utils as Utils
+import utils
 import tf.transformations
 import tf
 from threading import Lock
@@ -123,7 +123,7 @@ class ParticleFilter():
     permissible_poses[:, 0] = np.random.choice(permissible_x, self.N_PARTICLES)
     permissible_poses[:, 1] = np.random.choice(permissible_y, self.N_PARTICLES)
     permissible_poses[:, 2] = 2.0 * np.pi * np.random.random(self.N_PARTICLES)
-    Utils.map_to_world(permissible_poses, self.map_info)
+    utils.map_to_world(permissible_poses, self.map_info)
     self.particles[:] = permissible_poses[:]
     self.weights[:] = 1.0 / self.N_PARTICLES 
 
@@ -184,7 +184,7 @@ class ParticleFilter():
     pose_x = msg.pose.pose.position.x
     pose_y = msg.pose.pose.position.y
     pose_orientation = msg.pose.pose.orientation
-    pose_angle = Utils.quaternion_to_angle(pose_orientation)
+    pose_angle = utils.quaternion_to_angle(pose_orientation)
     self.particles[:, 0] = pose_x + np.random.normal(0.0, 0.15,  self.N_PARTICLES)
     self.particles[:, 1] = pose_y + np.random.normal(0.0, 0.15,  self.N_PARTICLES)
     self.particles[:, 2] = pose_angle + np.random.normal(0.0, 0.15,  self.N_PARTICLES)
@@ -208,10 +208,10 @@ class ParticleFilter():
       if PUBLISH_TF:
         self.publish_tf(self.inferred_pose)
       ps = PoseStamped()
-      ps.header = Utils.make_header("map")
+      ps.header = utils.make_header("map")
       ps.pose.position.x = self.inferred_pose[0]
       ps.pose.position.y = self.inferred_pose[1]
-      ps.pose.orientation = Utils.angle_to_quaternion(self.inferred_pose[2])    
+      ps.pose.orientation = utils.angle_to_quaternion(self.inferred_pose[2])    
       if(self.pose_pub.get_num_connections() > 0):
         self.pose_pub.publish(ps)
       if(self.pub_odom.get_num_connections() > 0):
@@ -242,8 +242,8 @@ class ParticleFilter():
   '''
   def publish_particles(self, particles):
     pa = PoseArray()
-    pa.header = Utils.make_header("map")
-    pa.poses = Utils.particles_to_poses(particles)
+    pa.header = utils.make_header("map")
+    pa.poses = utils.particles_to_poses(particles)
     self.particle_pub.publish(pa)
 
 # Suggested main 

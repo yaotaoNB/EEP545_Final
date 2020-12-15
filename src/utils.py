@@ -165,3 +165,45 @@ def world_to_map(poses, map_info):
     poses[:,1] = s*temp       + c*poses[:,1]
     poses[:,2] += angle
 
+def world_to_map_r(pose, map_info): # world_to_map that returns a config
+    # equivalent to map_to_grid(world_to_map(pose))
+    # operates in place
+    scale = map_info.resolution
+    angle = -quaternion_to_angle(map_info.origin.orientation)
+    config = [0.0, 0.0]
+    # translation
+    config[0] = (1.0 / float(scale)) * (pose[0] - map_info.origin.position.x)
+    config[1] = (1.0 / float(scale)) * (pose[1] - map_info.origin.position.y)
+
+    # rotation
+    c, s = np.cos(angle), np.sin(angle)
+    # we need to store the x coordinates since they will be overwritten
+    temp = np.copy(config[0])
+    config[0] = int(c * config[0] - s * config[1])
+    config[1] = int(s * temp + c * config[1])
+
+    return config
+
+
+def map_to_world_r(pose, map_info): ## map_to_world that returns a config
+    scale = map_info.resolution
+    angle = quaternion_to_angle(map_info.origin.orientation)
+
+    # rotate
+    config = np.array([pose[0], map_info.height - pose[1], pose[2]])
+    # rotation
+    c, s = np.cos(angle), np.sin(angle)
+    # we need to store the x coordinates since they will be overwritten
+    temp = np.copy(config[0])
+    config[0] = c * config[0] - s * config[1]
+    config[1] = s * temp + c * config[1]
+
+    # scale
+    config[:2] *= float(scale)
+
+    # translate
+    config[0] += map_info.origin.position.x
+    config[1] += map_info.origin.position.y
+    config[2] += angle
+
+    return config
