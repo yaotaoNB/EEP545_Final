@@ -200,7 +200,7 @@ class ParticleFilter():
        Sample so that particles with higher weights are more likely to be sampled.
   '''
   def visualize(self):
-    #print 'Visualizing...'
+    # print 'Visualizing...'
     self.state_lock.acquire()
     self.inferred_pose = self.expected_pose()
 
@@ -230,9 +230,10 @@ class ParticleFilter():
         self.publish_particles(self.particles)
         
     if self.pub_laser.get_num_connections() > 0 and isinstance(self.sensor_model.last_laser, LaserScan):
-      self.sensor_model.last_laser.header.frame_id = "/laser"
+      self.sensor_model.last_laser.header.frame_id = "/laser" #"map" 
       self.sensor_model.last_laser.header.stamp = rospy.Time.now()
       self.pub_laser.publish(self.sensor_model.last_laser)
+    
     self.state_lock.release()
 
   '''
@@ -273,10 +274,10 @@ if __name__ == '__main__':
                       steering_angle_to_servo_gain, car_length)
   
   while not rospy.is_shutdown(): # Keep going until we kill it
+    # print('while not rospy.is_shutdown()')
     # Callbacks are running in separate threads
     if pf.sensor_model.do_resample: # Check if the sensor model says it's time to resample
       pf.sensor_model.do_resample = False # Reset so that we don't keep resampling
-
       # Resample
       if pf.RESAMPLE_TYPE == "naiive":
         pf.resampler.resample_naiive()
@@ -284,5 +285,4 @@ if __name__ == '__main__':
         pf.resampler.resample_low_variance()
       else:
         print "Unrecognized resampling method: "+ pf.RESAMPLE_TYPE      
-      
       pf.visualize() # Perform visualization

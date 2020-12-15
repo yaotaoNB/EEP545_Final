@@ -4,7 +4,7 @@
 	<arg name="n_particles" default="500"/>
 	<arg name="n_viz_particles" default="20" />
 	<arg name="motion_model" default="kinematic" />
-	<arg name="odometry_topic" default="/car/vesc/odom" />
+	<arg name="odometry_topic" default="/vesc/odom" />
 	<arg name="motor_state_topic" default="/car/vesc/sensors/core" />
 	<arg name="servo_state_topic" default="/car/vesc/sensors/servo_position_command" />
 	<arg name="scan_topic" default="/car/scan"/>

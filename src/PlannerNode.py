@@ -380,6 +380,7 @@ if __name__ == '__main__':
   while not rospy.is_shutdown():
     raw_input("Press Enter to publish car_plan...")
     pn.publish_plan(pn.cur_plan)
-    print('plan len: ', len(pn.cur_plan))
-    print('plan print: ', pn.cur_plan)
+    print('planned is published to topic planner_node/car_plan')
+    # print('plan len: ', len(pn.cur_plan))
+    # print('plan print: ', pn.cur_plan)
     rospy.sleep(1.0) 

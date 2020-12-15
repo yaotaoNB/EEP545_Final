@@ -187,7 +187,8 @@ def main():
   error_buff_length = rospy.get_param('~error_buff_length', 10)  # Starting val: 10
   speed = rospy.get_param('~speed', 1.0)  # Default val: 1.0
 
-  print('set the car initialpose to the start waypoint')
+  # print('set the car initialpose to the start waypoint')
+  raw_input("Press Enter to set initialpose...")  # Waits for ENTER key press
   initialpose_pub = rospy.Publisher(initialpose_topic, PoseWithCovarianceStamped, 
                                        queue_size=10)
   pcs = PoseWithCovarianceStamped()
@@ -214,7 +215,6 @@ def main():
     converted_plan.append([msg.position.x, msg.position.y, Utils.quaternion_to_angle(msg.orientation)])
 
   print('plan is received, car starts to drive along the plan...')
-  # raw_input("Press Enter to start the car driving along the planned path...")  # Waits for ENTER key press
   # Create a LineFollower object
   LineFollower(converted_plan, pose_topic, plan_lookahead, translation_weight, rotation_weight, kp, ki, kd,
                error_buff_length, speed)
